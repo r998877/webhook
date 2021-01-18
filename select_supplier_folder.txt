@@ -1,0 +1,147 @@
+﻿<script src="../SiteAssets/jquery.min.js" type="text/javascript"></script>
+<script type="text/javascript">
+    var listFolderItems; // The list of retrieved ticket folder.
+    var listSupplierItems; // The list of retrieved supplier display names.
+    var listSupplier = 'Supplier';
+    var listTickets = 'Tickets';
+    var supArray = new Array();
+
+    // var ddlManagerFilter = 'ddlManagerFilter';
+
+    $(document).ready(function() {
+        document.getElementById("btn1").disabled = true;
+        SP.SOD.executeFunc("SP.js", "SP.ClientContext", loadSupplierList);
+    });
+
+    function loadSupplierList() {
+        var clientContext = new SP.ClientContext();
+        var targetList = clientContext.get_web().get_lists().getByTitle(listSupplier);
+        var query = new SP.CamlQuery();
+        var allViewQuery = "<View><Query><Where><IsNotNull><FieldRef Name='Title' /></IsNotNull></Where><OrderBy>" +
+            "<FieldRef Name='Title' Ascending='True' /></OrderBy></Query><ViewFields><FieldRef Name='Title' /><FieldRef Name='SupplierFolder' /></ViewFields><QueryOptions /></View>";
+
+        query.set_viewXml(allViewQuery);
+
+        listSupplierItems = targetList.getItems(query);
+        clientContext.load(listSupplierItems);
+        clientContext.executeQueryAsync(Function.createDelegate(this, this.onSupplierQuerySucceeded), Function.createDelegate(this, this.onQueryFailed));
+    }
+
+    function loadDropdownList() {
+        var clientContext = new SP.ClientContext();
+        var targetList = clientContext.get_web().get_lists().getByTitle(listTickets);
+        var query = new SP.CamlQuery();
+        var FolderQuery = "<View><Query><Where><And><Eq>" +
+            "<FieldRef Name='ContentType' /><Value Type='Computed'>Folder</Value></Eq>" +
+            "<IsNotNull><FieldRef Name='Title' /></IsNotNull></And></Where></Query></View>";
+        query.set_viewXml(FolderQuery);
+
+        listFolderItems = targetList.getItems(query);
+        clientContext.load(listFolderItems);
+        clientContext.executeQueryAsync(Function.createDelegate(this, this.onQuerySucceeded), Function.createDelegate(this, this.onQueryFailed));
+    }
+
+    function newTicket(option) {
+        var myselect = document.getElementById("Supplier_dd");
+        var sFolder;
+        var listStr = _spPageContextInfo.webServerRelativeUrl + "/Lists/Tickets/NewForm.aspx";
+        if (option == "d") {
+            location.href = listStr;
+            return;
+        } else if (option == "1") {
+            sFolder = _spPageContextInfo.webAbsoluteUrl + "/Lists/Tickets/" + myselect.options[0].value;
+        } else {
+            if (myselect.options[myselect.selectedIndex].value == "") {
+                var innerHTML = "Please select the supplier from the dropdown list.";
+                document.getElementsByName("answer")[0].innerHTML = innerHTML;
+                return;
+            }
+            sFolder = _spPageContextInfo.webAbsoluteUrl + "/Lists/Tickets/" + myselect.options[myselect.selectedIndex].value;
+        }
+        var paramStr = "?RootFolder=" + escapeProperly(sFolder);
+        //	alert("newTicket() " + sFolder);
+        location.href = listStr + paramStr;
+        return;
+    }
+
+    function onSupplierQuerySucceeded() {
+        //  	console.log(listSupplierItems.getItemAtIndex(0).get_fieldValues());
+        var listEnumerator = listSupplierItems.getEnumerator();
+        while (listEnumerator.moveNext()) {
+            var idx = listEnumerator.get_current().get_item('SupplierFolder');
+            supArray[idx] = listEnumerator.get_current().get_item("Title");
+        }
+        loadDropdownList();
+    }
+
+    function onQuerySucceeded() {
+        //  	console.log(listFolderItems.getItemAtIndex(0).get_fieldValues());
+
+        var myselect = document.getElementById("Supplier_dd"); //reference Dropdownlist
+
+        var listEnumerator = listFolderItems.getEnumerator();
+
+        var cnt = 0;
+        if (listFolderItems.get_count() < 1) {
+            newTicket("d");
+        } else if (listFolderItems.get_count() == 1) {
+            var theOption = new Option;
+            var Supplier_f = listFolderItems.getItemAtIndex(0).get_fieldValues().Title;
+            var Supplier;
+            if (supArray[Supplier_f] == undefined) {
+                Supplier = Supplier_f;
+            } else {
+                Supplier = supArray[Supplier_f];
+            }
+            theOption.text = " " + Supplier + " ";
+            theOption.value = Supplier_f;
+            myselect.options[cnt] = theOption;
+            newTicket("1");
+        } else if (listFolderItems.get_count() > 1) {
+            var theSelectOption = new Option;
+            theSelectOption.text = "Who is the supplier?";
+            theSelectOption.value = "";
+            theSelectOption.selected = true;
+            myselect.options[cnt++] = theSelectOption;
+            while (listEnumerator.moveNext()) {
+                var theOption = new Option;
+
+                var Supplier_f = listEnumerator.get_current().get_item("Title");
+                var Supplier;
+                if (supArray[Supplier_f] == undefined) {
+                    Supplier = Supplier_f;
+                } else {
+                    Supplier = supArray[Supplier_f];
+                }
+                theOption.text = " " + Supplier + " ";
+                theOption.value = Supplier_f;
+                myselect.options[cnt] = theOption;
+                cnt++;
+            }
+            document.getElementById("btn1").disabled = false;
+        }
+    }
+
+    function onQueryFailed(sender, args) {
+        alert('Request failed. \nError: ' + args.get_message() + '\nStackTrace: ' + args.get_stackTrace());
+    }
+</script>
+<table cellspacing="0">
+    <tbody>
+        <tr>
+            <td>​Supplier: </td>
+            <td>
+                <div id="Supplier_div" class="dropdown-content"><select id="Supplier_dd"></select></div>
+            </td>
+        </tr>
+    </tbody>
+</table>
+<hr>
+<p>
+    <span>Note to supplier: select your supplier name from the dropdown list.</span>
+</p>
+<p>
+    <span>Note to MEU: select the supplier for which you want to create a ticket.</span>
+</p>
+<p name="answer">&nbsp;</p>
+<input id="btn1" name="Button1" value="Create new ticket" onclick="newTicket('x');" type="button" />
